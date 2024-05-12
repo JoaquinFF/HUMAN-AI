@@ -1,2 +1,2 @@
 # HUMAN-AI
-AI integration project made for helping people with disabilities manage computer related tasks with ease
+This branch will be used for saving commits related with audio to text block
