@@ -1,73 +1,104 @@
 import tkinter as tk
-from tkinter import messagebox
-from tkinter import ttk
+import pyaudio
+import numpy as np
 from PIL import Image, ImageTk
+import sys
 
-class HumanAIApp:
-    def __init__(self, root):
+class VoiceDetectorApp:
+    def __init__(self, root, audio_device=None, camera_device=None):
         self.root = root
-        self.root.title("Human AI")
-        self.root.geometry("600x400+350+200")
-        self.root.withdraw()  # Ocultar la ventana principal al inicio
-        
-        self.create_startup_animation()
-    
-    def create_startup_animation(self):
-        self.animation_window = tk.Toplevel(self.root)
-        self.animation_window.overrideredirect(True)
-        self.animation_window.geometry("600x400+350+200")
-        self.animation_window.attributes('-alpha', 0.0)  # Iniciar con opacidad 0
+        self.root.title("HUMAN AI")
+        self.is_running = False
 
-        self.title_label = tk.Label(self.animation_window, text="Human AI", font=("Helvetica", 32))
-        self.title_label.place(relx=0.5, rely=0.5, anchor='center')
+        self.audio_device = audio_device
+        self.camera_device = camera_device
 
-        self.alpha = 0.0
-        self.fade_in()
+        self.canvas = tk.Canvas(self.root, width=400, height=400, bg='white')
+        self.canvas.pack()
 
-    def fade_in(self):
-        self.alpha += 0.01
-        if self.alpha <= 1.0:
-            self.animation_window.attributes('-alpha', self.alpha)
-            self.animation_window.after(10, self.fade_in)
+        # Crear un círculo azul más pequeño y de color más claro
+        self.circle = self.canvas.create_oval(180, 350, 220, 390, fill='#428CFF', outline='white')
+        self.canvas.tag_bind(self.circle, '<Button-1>', self.toggle_listen)
+
+        # Crear el ícono de micrófono como un widget de Canvas
+        self.microphone_icon = Image.open("mic_icon.png").resize((40, 40), Image.LANCZOS)
+        self.microphone_icon = ImageTk.PhotoImage(self.microphone_icon)
+
+        self.microphone_button = self.canvas.create_image(200, 370, image=self.microphone_icon)
+        self.canvas.tag_bind(self.microphone_button, '<Button-1>', self.toggle_listen)
+
+        # Coordenadas iniciales de la onda de audio
+        self.wave = self.canvas.create_line(180, 370, 220, 370, fill='white', width=2)
+        self.canvas.itemconfigure(self.wave, state='hidden')  # Ocultar la onda de audio al inicio
+
+        self.audio_stream = None
+
+    def toggle_listen(self, event):
+        if not self.is_running:
+            self.start_listen()
         else:
-            self.animation_window.after(500, self.end_animation)
+            self.stop_listen()
+            self.canvas.itemconfigure(self.wave, state='hidden')  # Ocultar la onda de audio al detener la escucha
+        self.root.update()  # Forzar la actualización de la interfaz gráfica
 
-    def end_animation(self):
-        self.animation_window.destroy()
-        self.root.deiconify()  # Mostrar la ventana principal
-        self.create_main_screen()
+    def start_listen(self):
+        self.is_running = True
+        self.canvas.itemconfigure(self.microphone_button, state='hidden')
+        self.audio_stream = self.open_mic_stream()
+        self.update_wave()
 
-    def create_main_screen(self):
-        self.main_frame = tk.Frame(self.root)
-        self.main_frame.pack(expand=True, fill=tk.BOTH)
+    def stop_listen(self):
+        self.is_running = False
+        self.canvas.itemconfigure(self.microphone_button, state='normal')
+        if self.audio_stream:
+            self.audio_stream.stop_stream()
+            self.audio_stream.close()
+        self.audio_stream = None
 
-        self.button_frame = tk.Frame(self.main_frame)
-        self.button_frame.pack(side=tk.BOTTOM, pady=20)
+    def open_mic_stream(self):
+        p = pyaudio.PyAudio()
+        stream = p.open(format=pyaudio.paInt16,
+                        channels=1,
+                        rate=44100,
+                        input=True,
+                        frames_per_buffer=1024)
+        return stream
 
-        self.start_button = ttk.Button(self.button_frame, text="Iniciar", command=self.start)
-        self.start_button.pack(side=tk.LEFT, padx=20)
+    def update_wave(self):
+        if self.is_running:
+            data = self.audio_stream.read(1024, exception_on_overflow=False)
+            data_np = np.frombuffer(data, dtype=np.int16)
+            data_np = data_np / 32768.0  # Normalizar los datos
 
-        self.stop_button = ttk.Button(self.button_frame, text="Detener", command=self.stop)
-        self.stop_button.pack(side=tk.LEFT, padx=20)
+            # Escalar los datos para que se ajusten al tamaño del círculo
+            scaled_data = data_np[::len(data_np)//200] * 80 + 370  # Toma 200 puntos y escala
 
-        # Cargar la imagen del ícono de configuración
-        self.settings_image = Image.open("setting.png")
-        self.settings_image = self.settings_image.resize((24, 24), Image.LANCZOS)
-        self.settings_photo = ImageTk.PhotoImage(self.settings_image)
+            points = []
+            for i, y in enumerate(scaled_data):
+                x = 180 + (i * 40 / len(scaled_data))  # Ajusta x al tamaño del círculo
+                points.append(x)
+                points.append(y)
 
-        self.settings_button = tk.Button(self.main_frame, image=self.settings_photo, command=self.settings, bd=0)
-        self.settings_button.place(relx=1.0, x=-10, y=10, anchor="ne")
+            # Calcula el centro vertical del círculo
+            circle_center = (self.canvas.coords(self.circle)[1] + self.canvas.coords(self.circle)[3]) / 2
 
-    def start(self):
-        messagebox.showinfo("Iniciar", "Iniciando...")
-
-    def stop(self):
-        messagebox.showinfo("Detener", "Deteniendo...")
-
-    def settings(self):
-        messagebox.showinfo("Configuración", "Abriendo configuración...")
+            # Desplaza la onda verticalmente para que esté en el centro del círculo
+            self.canvas.coords(self.wave, *points[0:2], points[2], circle_center, *points[4:])
+            self.canvas.itemconfigure(self.wave, state='normal')
+            self.root.after(50, self.update_wave)
+        else:
+            self.canvas.itemconfigure(self.microphone_button, state='normal')
 
 if __name__ == "__main__":
+    # Parsear los argumentos de línea de comandos
+    audio_device = None
+    camera_device = None
+    for i in range(len(sys.argv)):
+        if sys.argv[i] == '--audio' and i + 1 < len(sys.argv):
+            audio_device = sys.argv[i + 1]
+        elif sys.argv[i] == '--camera' and i + 1 < len(sys.argv):
+            camera_device = sys.argv[i + 1]
+
     root = tk.Tk()
-    app = HumanAIApp(root)
+    app = VoiceDetectorApp(root, audio_device, camera_device)
     root.mainloop()
