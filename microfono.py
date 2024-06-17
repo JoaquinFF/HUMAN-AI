@@ -5,7 +5,7 @@ import numpy as np
 class VoiceDetectorApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Voice Detector")
+        self.root.title("HUMAN AI")
         self.is_running = False
 
         self.canvas = tk.Canvas(self.root, width=400, height=400, bg='white')
