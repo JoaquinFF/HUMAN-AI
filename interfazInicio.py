@@ -43,6 +43,16 @@ class HumanAIApp:
         self.main_frame = tk.Frame(self.root)
         self.main_frame.pack(expand=True, fill=tk.BOTH)
 
+      # Cargar la imagen de fondo en un Label centrado y más pequeño
+        background_image = Image.open("human.png")
+        background_image = background_image.resize((300, 300), Image.LANCZOS)  # Ajustar tamaño con LANCZOS
+        background_photo = ImageTk.PhotoImage(background_image)
+
+
+        background_label = tk.Label(self.main_frame, image=background_photo)
+        background_label.image = background_photo  # Mantener referencia para evitar que se borre la imagen
+        background_label.place(relx=0.5, rely=0.5, anchor='center')
+
         self.button_frame = tk.Frame(self.main_frame)
         self.button_frame.pack(side=tk.BOTTOM, pady=20)
 
